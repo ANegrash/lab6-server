@@ -1,9 +1,7 @@
 import collectionClasses.*;
 
 import java.io.*;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.time.LocalDate;
@@ -14,25 +12,28 @@ import java.util.Locale;
 
 public class Connect {
     private static final int BUFFER_SIZE = 1024;
-    static int port = 11;
-    private DatagramSocket socket;
+    int port;
     boolean isComand=true;
     String comand, dataName;
     String[] data, historyData;
     LinkedList<LabWork> labwork;
     LinkedList<History> history;
     File base;
+    LabWork[] lw2= new LabWork[100];
     LabWork lw;
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    InetSocketAddress address, myAddress;
+    DatagramChannel datagramChannel;
+    DatagramSocket s;
+    InetAddress inetAddress;
 
 
     public void createServer() throws IOException, ClassNotFoundException {
 
-            InetAddress hostIP = InetAddress.getLocalHost();
-            InetSocketAddress address = new InetSocketAddress(hostIP, port);
-            DatagramChannel datagramChannel = DatagramChannel.open();
-            DatagramSocket datagramSocket = datagramChannel.socket();
-            datagramSocket.bind(address);
+        SocketAddress a = new InetSocketAddress(InetAddress.getLocalHost(),8888);
+        s = new DatagramSocket();
+
+        System.out.println("Сервер запущен");
 
             ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
 
@@ -94,19 +95,25 @@ public class Connect {
 
 
             while (true) {
-                datagramChannel.receive(buffer);
-                buffer.flip();
+                //Receive a packet
+                byte[] recvBuf = new byte[15000];
+                DatagramPacket i = new DatagramPacket(recvBuf, recvBuf.length);
+                System.out.println("Сервер запущен"+recvBuf.length);
+                s.receive(i);
+                inetAddress=i.getAddress();
+                port =i.getPort();
+                System.out.println("Хост: "+inetAddress+"\nПорт: "+ port);
+
                 if(isComand){
-                    String data = new String(buffer.array(), "UTF-8");
+                    String message = new String(i.getData()).trim();
                     isComand=false;
-                    comand = data;
+                    comand = message;
                     System.out.println("\nПришла команда: " + comand);
                     if (comand.contains("help")) {
                         isComand=true;
                         addToHistory("help");
                     }else if(comand.contains("add_if_max")) {
                         addToHistory("add_if_max");
-
                     }else if(comand.contains("add")) {
                         addToHistory("add");
                     }else if(comand.contains("clear")) {
@@ -121,12 +128,25 @@ public class Connect {
                     }else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
 
                     }else if(comand.contains("history")) {
-
+                        addToHistory("history");
+                        String getHi = "История:\n";
+                        for(History h : history){
+                            getHi=getHi+h.getToWrite()+"\n";
+                        }
+                        sendInfo(getHi);
                     }else if(comand.contains("info")) {
-
+                        addToHistory("info");
+                        String dataI;
+                        dataI = "Тип коллекции: LinkedList\n"+
+                                "Количество элементов коллекции: " + labwork.size()+
+                                "\nАбсолютный путь файла хранения коллекции: " + base.getAbsolutePath()+
+                                "\nВес файла хранения коллекции: " + base.length() + " байт";
+                        sendInfo(dataI);
                     }else if(comand.contains("remove_by_id")) {
+                        addToHistory("remove_by_id");
 
                     }else if(comand.contains("remove_lower")) {
+                        addToHistory("remove_lower");
 
                     }else if(comand.contains("show")) {
 
@@ -154,9 +174,9 @@ public class Connect {
                         labwork.add(getLW);
                         if (labwork.getLast().getInfo().length() <= maxVal) {
                             labwork.remove(labwork.getLast());
-                            System.out.println("Введённое значение не было максимальным...");
+                            sendInfo("Введённое значение не было максимальным...");
                         }else {
-                            System.out.println("Введённое значение добавлено, поскольку максимально!");
+                            sendInfo("Введённое значение добавлено, поскольку максимально!");
                         }
                         saveData(labwork);
                     }else if(comand.contains("add")) {
@@ -181,21 +201,60 @@ public class Connect {
                             if (getMinimalPoint > p.getMinimalPoint())
                                 counter++;
                         }
-                        System.out.println("Количество элементов, значение поля minimalPoint которых меньше заданного: " + counter);
+                        sendInfo("Количество элементов, значение поля minimalPoint которых меньше заданного: " + counter);
                     }else if(comand.contains("filter_by_minimal_point")) {
 
                     }else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
 
                     }else if(comand.contains("remove_by_id")) {
+                        int getIdToRemove = buffer.getInt();
+                        boolean completed = false;
+                        for (LabWork p : labwork) {
+                            if (getIdToRemove == p.getId()){
+                                labwork.remove(p);
+                                completed=true;
+                            }
+                        }
+                        saveData(labwork);
 
                     }else if(comand.contains("remove_lower")) {
+                        int myVal, counter=0;
 
+                        final byte[] bytes = new byte[buffer.remaining()];
+                        buffer.duplicate().get(bytes);
+                        LabWork getLW = (LabWork) getObject(bytes);
+                        isComand=true;
+                        if (labwork.isEmpty()){
+                            getLW.addNewId(1);
+                        }else {
+                            getLW.addNewId(labwork.getLast().getId() + 1);
+                        }
+                        System.out.println("\nПолученные данные: "+getLW.getInfo());
+                        labwork.add(getLW);
+                        myVal=labwork.getLast().getInfo().length();
+
+                        for (LabWork p : labwork) {
+                            if (p.getInfo().length() < myVal) {
+                                lw2[counter]=p;
+                                counter++;
+                            }
+                        }
+
+                        for (int j = 0; j<lw2.length; j++){
+                            labwork.remove(lw2[j]);
+                        }
+                        labwork.remove(labwork.getLast());
+                        sendInfo("Всего найдено и удалено "+counter+ " элементов");
+                        saveData(labwork);
                     }else if(comand.contains("update_id")) {
 
                     }
 
                     isComand=true;
                     buffer.clear();
+                    if(comand.contains("update_id")) {
+                        isComand=false;
+                    }
 
                 }
                 buffer.clear();
@@ -238,5 +297,17 @@ public class Connect {
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
+    }
+
+    public void sendAnswer(){
+
+    }
+
+    public void sendInfo(String data) throws IOException {
+        byte[] sendData = data.getBytes();
+
+        DatagramPacket o = new DatagramPacket(sendData, sendData.length, inetAddress, port);
+        s.send(o);
+
     }
 }
