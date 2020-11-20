@@ -1,7 +1,9 @@
 import collectionClasses.*;
 
 import java.io.*;
-import java.net.*;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.time.LocalDate;
@@ -12,30 +14,23 @@ import java.util.Locale;
 
 public class Connect {
     private static final int BUFFER_SIZE = 1024;
-    int port;
+    int port = 13, port2=12;
+    private DatagramSocket socket;
     boolean isComand=true;
     String comand, dataName;
     String[] data, historyData;
     LinkedList<LabWork> labwork;
     LinkedList<History> history;
     File base;
-    LabWork[] lw2= new LabWork[100];
     LabWork lw;
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-    InetSocketAddress address, myAddress;
-    DatagramChannel datagramChannel;
-    DatagramSocket s;
-    InetAddress inetAddress;
 
 
     public void createServer() throws IOException, ClassNotFoundException {
 
-        SocketAddress a = new InetSocketAddress(InetAddress.getLocalHost(),8888);
-        s = new DatagramSocket();
-
         System.out.println("Сервер запущен");
 
-            ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
+        ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
 
         labwork = new LinkedList<>();
         history = new LinkedList<>();
@@ -94,171 +89,171 @@ public class Connect {
         }
 
 
-            while (true) {
-                //Receive a packet
-                byte[] recvBuf = new byte[15000];
-                DatagramPacket i = new DatagramPacket(recvBuf, recvBuf.length);
-                System.out.println("Сервер запущен"+recvBuf.length);
-                s.receive(i);
-                inetAddress=i.getAddress();
-                port =i.getPort();
-                System.out.println("Хост: "+inetAddress+"\nПорт: "+ port);
-
-                if(isComand){
-                    String message = new String(i.getData()).trim();
-                    isComand=false;
-                    comand = message;
-                    System.out.println("\nПришла команда: " + comand);
-                    if (comand.contains("help")) {
-                        isComand=true;
-                        addToHistory("help");
-                    }else if(comand.contains("add_if_max")) {
-                        addToHistory("add_if_max");
-                    }else if(comand.contains("add")) {
-                        addToHistory("add");
-                    }else if(comand.contains("clear")) {
-                        isComand=true;
-                        addToHistory("clear");
-                        labwork.clear();
-                        saveData(labwork);
-                    }else if(comand.contains("count_less_than_minimal_point")) {
-                        addToHistory("count_less_than_minimal_point");
-                    }else if(comand.contains("filter_by_minimal_point")) {
-
-                    }else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
-
-                    }else if(comand.contains("history")) {
-                        addToHistory("history");
-                        String getHi = "История:\n";
-                        for(History h : history){
-                            getHi=getHi+h.getToWrite()+"\n";
-                        }
-                        sendInfo(getHi);
-                    }else if(comand.contains("info")) {
-                        addToHistory("info");
-                        String dataI;
-                        dataI = "Тип коллекции: LinkedList\n"+
-                                "Количество элементов коллекции: " + labwork.size()+
-                                "\nАбсолютный путь файла хранения коллекции: " + base.getAbsolutePath()+
-                                "\nВес файла хранения коллекции: " + base.length() + " байт";
-                        sendInfo(dataI);
-                    }else if(comand.contains("remove_by_id")) {
-                        addToHistory("remove_by_id");
-
-                    }else if(comand.contains("remove_lower")) {
-                        addToHistory("remove_lower");
-
-                    }else if(comand.contains("show")) {
-
-                    }else if(comand.contains("update_id")) {
-
-                    }
-                    buffer.clear();
-
-                }else{
-                    if(comand.contains("add_if_max")) {
-                        int maxVal = 0;
-                        for (LabWork p : labwork) {
-                            if (p.getInfo().length() > maxVal) maxVal = p.getInfo().length();
-                        }
-                        final byte[] bytes = new byte[buffer.remaining()];
-                        buffer.duplicate().get(bytes);
-                        LabWork getLW = (LabWork) getObject(bytes);
-                        isComand=true;
-                        if (labwork.isEmpty()){
-                            getLW.addNewId(1);
-                        }else {
-                            getLW.addNewId(labwork.getLast().getId() + 1);
-                        }
-                        System.out.println("\nПолученные данные: "+getLW.getInfo());
-                        labwork.add(getLW);
-                        if (labwork.getLast().getInfo().length() <= maxVal) {
-                            labwork.remove(labwork.getLast());
-                            sendInfo("Введённое значение не было максимальным...");
-                        }else {
-                            sendInfo("Введённое значение добавлено, поскольку максимально!");
-                        }
-                        saveData(labwork);
-                    }else if(comand.contains("add")) {
-                        addToHistory("add");
-                        final byte[] bytes = new byte[buffer.remaining()];
-                        buffer.duplicate().get(bytes);
-                        LabWork getLW = (LabWork) getObject(bytes);
-                        isComand=true;
-                        if (labwork.isEmpty()){
-                            getLW.addNewId(1);
-                        }else {
-                            getLW.addNewId(labwork.getLast().getId() + 1);
-                        }
-                        System.out.println("\nПолученные данные: "+getLW.getInfo());
-                        labwork.add(getLW);
-                        saveData(labwork);
-
-                    }else if(comand.contains("count_less_than_minimal_point")) {
-                        float getMinimalPoint = buffer.duplicate().getFloat();
-                        int counter = 0;
-                        for (LabWork p : labwork) {
-                            if (getMinimalPoint > p.getMinimalPoint())
-                                counter++;
-                        }
-                        sendInfo("Количество элементов, значение поля minimalPoint которых меньше заданного: " + counter);
-                    }else if(comand.contains("filter_by_minimal_point")) {
-
-                    }else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
-
-                    }else if(comand.contains("remove_by_id")) {
-                        int getIdToRemove = buffer.getInt();
-                        boolean completed = false;
-                        for (LabWork p : labwork) {
-                            if (getIdToRemove == p.getId()){
-                                labwork.remove(p);
-                                completed=true;
-                            }
-                        }
-                        saveData(labwork);
-
-                    }else if(comand.contains("remove_lower")) {
-                        int myVal, counter=0;
-
-                        final byte[] bytes = new byte[buffer.remaining()];
-                        buffer.duplicate().get(bytes);
-                        LabWork getLW = (LabWork) getObject(bytes);
-                        isComand=true;
-                        if (labwork.isEmpty()){
-                            getLW.addNewId(1);
-                        }else {
-                            getLW.addNewId(labwork.getLast().getId() + 1);
-                        }
-                        System.out.println("\nПолученные данные: "+getLW.getInfo());
-                        labwork.add(getLW);
-                        myVal=labwork.getLast().getInfo().length();
-
-                        for (LabWork p : labwork) {
-                            if (p.getInfo().length() < myVal) {
-                                lw2[counter]=p;
-                                counter++;
-                            }
-                        }
-
-                        for (int j = 0; j<lw2.length; j++){
-                            labwork.remove(lw2[j]);
-                        }
-                        labwork.remove(labwork.getLast());
-                        sendInfo("Всего найдено и удалено "+counter+ " элементов");
-                        saveData(labwork);
-                    }else if(comand.contains("update_id")) {
-
-                    }
-
+        while (true) {
+            InetAddress hostIP = InetAddress.getLocalHost();
+            InetSocketAddress address = new InetSocketAddress(hostIP, port);
+            DatagramChannel datagramChannel = DatagramChannel.open();
+            DatagramSocket datagramSocket = datagramChannel.socket();
+            datagramSocket.bind(address);
+            datagramChannel.receive(buffer);
+            datagramSocket.close();
+            buffer.flip();
+            if(isComand){
+                String data = new String(buffer.array(), "UTF-8");
+                isComand=false;
+                comand = data;
+                if (comand.contains("help")) {
+                    System.out.println("\nПришла команда: help");
+                    sendAnswer("help : вывести справку по доступным командам\n" +
+                            "info : вывести в стандартный поток вывода информацию о коллекции (тип, количество элементов, вес файла и т.д.)\n" +
+                            "show : вывести в стандартный поток вывода все элементы коллекции в строковом представлении\n" +
+                            "add {element} : добавить новый элемент в коллекцию\n" +
+                            "update_id {element} : обновить значение элемента коллекции, id которого равен заданному\n" +
+                            "remove_by_id {id} : удалить элемент из коллекции по его id\n" +
+                            "clear : очистить коллекцию\n" +
+                            "exit : завершить программу (без сохранения в файл)\n" +
+                            "add_if_max {element} : добавить новый элемент в коллекцию, если его значение превышает значение наибольшего элемента этой коллекции\n" +
+                            "remove_lower {element} : удалить из коллекции все элементы, меньшие, чем заданный\n" +
+                            "history : вывести последние 12 команд (без их аргументов)\n" +
+                            "count_less_than_minimal_point {minimalPoint} : вывести количество элементов, значение поля minimalPoint которых меньше заданного\n" +
+                            "filter_by_minimal_point {minimalPoint} : вывести элементы, значение поля minimalPoint которых равно заданному\n" +
+                            "filter_less_than_personal_qualities_minimum {personalQualitiesMinimum} : вывести элементы, значение поля personalQualitiesMinimum которых меньше заданного");
                     isComand=true;
-                    buffer.clear();
-                    if(comand.contains("update_id")) {
-                        isComand=false;
-                    }
+                    addToHistory("help");
+                }else if(comand.contains("add_if_max")) {
+                    addToHistory("add_if_max");
+                    System.out.println("\nПришла команда: add_if_max");
+                    sendAnswer("Добавление нового элемента в коллекцию:");
 
+                }else if(comand.contains("add")) {
+                    addToHistory("add");
+                    System.out.println("\nПришла команда: add");
+                    sendAnswer("Добавление нового элемента в коллекцию:");
+                }else if(comand.contains("clear")) {
+                    System.out.println("\nПришла команда: clear");
+                    isComand=true;
+                    addToHistory("clear");
+                    labwork.clear();
+                    saveData(labwork);
+                    sendAnswer("Коллекция успешно очищена");
+                }else if(comand.contains("count_less_than_minimal_point")) {
+                    System.out.println("\nПришла команда: count_less_than_minimal_point");
+                    addToHistory("count_less_than_minimal_point");
+                    sendAnswer("Введите значение minimal point");
+                }else if(comand.contains("filter_by_minimal_point")) {
+                    System.out.println("\nПришла команда: filter_by_minimal_point");
+                    sendAnswer("Введите значение minimal point");
+                }else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
+                    System.out.println("\nПришла команда: filter_less_than_personal_qualities_minimum");
+                    sendAnswer("Введите значение personal quality minimum");
+                }else if(comand.contains("history")) {
+                    System.out.println("\nПришла команда: history");
+                    String toSend="";
+                    for(History h : history){
+                        toSend=toSend+h.getToWrite();
+                    }
+                    sendAnswer(toSend);
+                }else if(comand.contains("info")) {
+                    System.out.println("\nПришла команда: info");
+                    String myAnswer= "Тип коллекции: LinkedList\n"+
+                    "Количество элементов коллекции: " + labwork.size()+"\n" +
+                    "Абсолютный путь файла хранения коллекции: " + base.getAbsolutePath()+"\n" +
+                    "Вес файла хранения коллекции: " + base.length() + " байт";
+                    sendAnswer(myAnswer);
+                    isComand=true;
+                    addToHistory("info");
+                }else if(comand.contains("remove_by_id")) {
+                    System.out.println("\nПришла команда: remove_by_id");
+
+                }else if(comand.contains("remove_lower")) {
+                    System.out.println("\nПришла команда: remove_lower");
+                    sendAnswer("Добавление нового элемента в коллекцию:");
+                }else if(comand.contains("show")) {
+                    System.out.println("\nПришла команда: show");
+                    String myAnswer ="";
+                    for (LabWork p : labwork) {
+                        myAnswer=myAnswer+p.getInfo()+"\n";
+                    }
+                    if (myAnswer.length()==0) myAnswer="Казна пуста, милорд";
+                    sendAnswer(myAnswer);
+                    isComand=true;
+                    addToHistory("show");
+
+                }else if(comand.contains("update_id")) {
+                    System.out.println("\nПришла команда: update_id");
+                    sendAnswer("Введите id элемента, который хотите изменить");
+                    addToHistory("update_id");
+                }else {
+                    System.err.println("\nПришла неизвестная команда");
+                    sendAnswer("Мы не нашли такую команду. Введите help для вызова списка команд");
                 }
                 buffer.clear();
+
+            }else{
+                if(comand.contains("add_if_max")) {
+                    int maxVal = 0;
+                    for (LabWork p : labwork) {
+                        if (p.getInfo().length() > maxVal) maxVal = p.getInfo().length();
+                    }
+                    final byte[] bytes = new byte[buffer.remaining()];
+                    buffer.duplicate().get(bytes);
+                    LabWork getLW = (LabWork) getObject(bytes);
+                    isComand=true;
+                    if (labwork.isEmpty()){
+                        getLW.addNewId(1);
+                    }else {
+                        getLW.addNewId(labwork.getLast().getId() + 1);
+                    }
+                    System.out.println("\nПолученные данные: "+getLW.getInfo());
+                    labwork.add(getLW);
+                    if (labwork.getLast().getInfo().length() <= maxVal) {
+                        labwork.remove(labwork.getLast());
+                        System.out.println("Введённое значение не было максимальным...");
+                    }else {
+                        System.out.println("Введённое значение добавлено, поскольку максимально!");
+                    }
+                    saveData(labwork);
+                }else if(comand.contains("add")) {
+                    addToHistory("add");
+                    final byte[] bytes = new byte[buffer.remaining()];
+                    buffer.duplicate().get(bytes);
+                    LabWork getLW = (LabWork) getObject(bytes);
+                    isComand=true;
+                    if (labwork.isEmpty()){
+                        getLW.addNewId(1);
+                    }else {
+                        getLW.addNewId(labwork.getLast().getId() + 1);
+                    }
+                    System.out.println("\nПолученные данные: "+getLW.getInfo());
+                    labwork.add(getLW);
+                    saveData(labwork);
+
+                }else if(comand.contains("count_less_than_minimal_point")) {
+                    float getMinimalPoint = buffer.duplicate().getFloat();
+                    int counter = 0;
+                    for (LabWork p : labwork) {
+                        if (getMinimalPoint > p.getMinimalPoint())
+                            counter++;
+                    }
+                    System.out.println("Количество элементов, значение поля minimalPoint которых меньше заданного: " + counter);
+                }else if(comand.contains("filter_by_minimal_point")) {
+
+                }else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
+
+                }else if(comand.contains("remove_by_id")) {
+
+                }else if(comand.contains("remove_lower")) {
+
+                }else if(comand.contains("update_id")) {
+
+                }
+
+                isComand=true;
+                buffer.clear();
+
             }
+            buffer.clear();
+        }
 
 
     }
@@ -286,6 +281,21 @@ public class Connect {
             e.printStackTrace();
         }
     }
+    public void sendAnswer(String answer) throws IOException{
+        InetAddress hostIP = InetAddress.getLocalHost();
+        InetSocketAddress myAddress2 = new InetSocketAddress(hostIP, port2);
+        DatagramChannel datagramChannel2 = DatagramChannel.open();
+        //datagramChannel.bind(myAddress);
+
+        ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
+        buffer.put(answer.getBytes());
+        buffer.flip();
+        System.out.println("Отправка данных...");
+        datagramChannel2.send(buffer, myAddress2);
+        System.out.println("Отправка завершена.");
+        buffer.clear();
+
+    }
 
     public void saveData(LinkedList lw){
         try(PrintWriter pw = new PrintWriter(dataName))
@@ -297,17 +307,5 @@ public class Connect {
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
-    }
-
-    public void sendAnswer(){
-
-    }
-
-    public void sendInfo(String data) throws IOException {
-        byte[] sendData = data.getBytes();
-
-        DatagramPacket o = new DatagramPacket(sendData, sendData.length, inetAddress, port);
-        s.send(o);
-
     }
 }
