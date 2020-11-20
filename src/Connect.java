@@ -13,16 +13,17 @@ import java.util.LinkedList;
 import java.util.Locale;
 
 public class Connect {
-    private static final int BUFFER_SIZE = 1024;
+    private static final int BUFFER_SIZE = 10000;
     int port = 13, port2=12;
     private DatagramSocket socket;
-    boolean isComand=true;
+    boolean isComand=true, isSended=true;
     String comand, dataName;
     String[] data, historyData;
     LinkedList<LabWork> labwork;
     LinkedList<History> history;
     File base;
     LabWork lw;
+    LabWork[] lw2= new LabWork[100];
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 
@@ -101,6 +102,9 @@ public class Connect {
             if(isComand){
                 String data = new String(buffer.array(), "UTF-8");
                 isComand=false;
+                buffer.clear();
+                buffer.put(new byte[1024]);
+                buffer.clear();
                 comand = data;
                 if (comand.contains("help")) {
                     System.out.println("\nПришла команда: help");
@@ -139,10 +143,10 @@ public class Connect {
                 }else if(comand.contains("count_less_than_minimal_point")) {
                     System.out.println("\nПришла команда: count_less_than_minimal_point");
                     addToHistory("count_less_than_minimal_point");
-                    sendAnswer("Введите значение minimal point");
+                    sendAnswer("Введите значение minimal point для сравнения (тип Float, больше или равно 0):");
                 }else if(comand.contains("filter_by_minimal_point")) {
                     System.out.println("\nПришла команда: filter_by_minimal_point");
-                    sendAnswer("Введите значение minimal point");
+                    sendAnswer("Введите значение minimal point для фильтрации (тип Float, больше или равно 0):");
                 }else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
                     System.out.println("\nПришла команда: filter_less_than_personal_qualities_minimum");
                     sendAnswer("Введите значение personal quality minimum");
@@ -150,9 +154,10 @@ public class Connect {
                     System.out.println("\nПришла команда: history");
                     String toSend="";
                     for(History h : history){
-                        toSend=toSend+h.getToWrite();
+                        toSend=toSend+h.getToWrite()+"\n";
                     }
                     sendAnswer(toSend);
+                    isComand=true;
                 }else if(comand.contains("info")) {
                     System.out.println("\nПришла команда: info");
                     String myAnswer= "Тип коллекции: LinkedList\n"+
@@ -164,7 +169,7 @@ public class Connect {
                     addToHistory("info");
                 }else if(comand.contains("remove_by_id")) {
                     System.out.println("\nПришла команда: remove_by_id");
-
+                    sendAnswer("Введите id элемента, который нужно удалить (целое число, больше 0):");
                 }else if(comand.contains("remove_lower")) {
                     System.out.println("\nПришла команда: remove_lower");
                     sendAnswer("Добавление нового элемента в коллекцию:");
@@ -184,6 +189,7 @@ public class Connect {
                     sendAnswer("Введите id элемента, который хотите изменить");
                     addToHistory("update_id");
                 }else {
+                    isComand=true;
                     System.err.println("\nПришла неизвестная команда");
                     sendAnswer("Мы не нашли такую команду. Введите help для вызова списка команд");
                 }
@@ -191,6 +197,7 @@ public class Connect {
 
             }else{
                 if(comand.contains("add_if_max")) {
+                    isComand=true;
                     int maxVal = 0;
                     for (LabWork p : labwork) {
                         if (p.getInfo().length() > maxVal) maxVal = p.getInfo().length();
@@ -208,12 +215,14 @@ public class Connect {
                     labwork.add(getLW);
                     if (labwork.getLast().getInfo().length() <= maxVal) {
                         labwork.remove(labwork.getLast());
-                        System.out.println("Введённое значение не было максимальным...");
+                        sendAnswer("Введённое значение не было максимальным...");
                     }else {
-                        System.out.println("Введённое значение добавлено, поскольку максимально!");
+                        sendAnswer("Введённое значение добавлено, поскольку максимально!");
                     }
                     saveData(labwork);
-                }else if(comand.contains("add")) {
+                }
+                else if(comand.contains("add")) {
+                    isComand=true;
                     addToHistory("add");
                     final byte[] bytes = new byte[buffer.remaining()];
                     buffer.duplicate().get(bytes);
@@ -228,27 +237,113 @@ public class Connect {
                     labwork.add(getLW);
                     saveData(labwork);
 
-                }else if(comand.contains("count_less_than_minimal_point")) {
-                    float getMinimalPoint = buffer.duplicate().getFloat();
+                }
+                else if(comand.contains("count_less_than_minimal_point")) {
+                    isComand=true;
+                    String datas = new String(buffer.array(), "UTF-8");
+                    float getMinimalPoint = Float.parseFloat(datas);
                     int counter = 0;
                     for (LabWork p : labwork) {
                         if (getMinimalPoint > p.getMinimalPoint())
                             counter++;
                     }
-                    System.out.println("Количество элементов, значение поля minimalPoint которых меньше заданного: " + counter);
-                }else if(comand.contains("filter_by_minimal_point")) {
+                    sendAnswer("Количество элементов, значение поля minimalPoint которых меньше заданного: " + counter);
+                }
+                else if(comand.contains("filter_by_minimal_point")) {
+                    isComand=true;
+                    String datas = new String(buffer.array(), "UTF-8");
+                    float getMinimalPoint = Float.parseFloat(datas);
+                    String toSend="";
+                    for (LabWork p : labwork) {
+                        if (getMinimalPoint == p.getMinimalPoint()) toSend=toSend+p.getInfo()+"\n";
+                    }
+                    if(toSend.isEmpty()) toSend="Элементы не найдены";
+                    sendAnswer(toSend);
+                }
+                else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
+                    isComand=true;
+                    String datas69 = "";
+                    double getPQM = buffer.getDouble();
+                    for (LabWork p : labwork) {
+                        if (getPQM > p.getPQM()) datas69=datas69+p.getInfo()+"\n";
+                    }
+                    if(datas69.isEmpty()) datas69="Элементы не найдены";
+                    sendAnswer(datas69);
+                }
+                else if(comand.contains("remove_by_id")) {
+                    isComand=true;
+                    int getIdToRemove =buffer.getInt();
+                    boolean completed = false;
+                    for (LabWork p : labwork) {
+                        if (getIdToRemove == p.getId()){
+                            labwork.remove(p);
+                            completed=true;
+                        }
+                    }
+                    if(completed){
+                        sendAnswer("Удаление прошло успешно");
+                    }else {
+                        sendAnswer("Удаление не произошло. Возможно Вы указали несуществующий id");
+                    }
+                    saveData(labwork);
+                }
+                else if(comand.contains("remove_lower")) {
+                    isComand=true;
+                    int myVal, counter=0;
 
-                }else if(comand.contains("filter_less_than_personal_qualities_minimum")) {
+                    final byte[] bytes = new byte[buffer.remaining()];
+                    buffer.duplicate().get(bytes);
+                    LabWork getLW = (LabWork) getObject(bytes);
+                    isComand=true;
+                    if (labwork.isEmpty()){
+                        getLW.addNewId(1);
+                    }else {
+                        getLW.addNewId(labwork.getLast().getId() + 1);
+                    }
+                    System.out.println("\nПолученные данные: "+getLW.getInfo());
+                    labwork.add(getLW);
+                    myVal=labwork.getLast().getInfo().length();
 
-                }else if(comand.contains("remove_by_id")) {
+                    for (LabWork p : labwork) {
+                        if (p.getInfo().length() < myVal) {
+                            lw2[counter]=p;
+                            counter++;
+                        }
+                    }
 
-                }else if(comand.contains("remove_lower")) {
-
-                }else if(comand.contains("update_id")) {
+                    for (int j = 0; j<lw2.length; j++){
+                        labwork.remove(lw2[j]);
+                    }
+                    labwork.remove(labwork.getLast());
+                    sendAnswer("Всего найдено и удалено "+counter+ " элементов");
+                    saveData(labwork);
 
                 }
+                else if(comand.contains("update_id")) {
+                    if(isSended){
+                        int getIdToUpd =buffer.getInt();
+                        boolean completed = false;
+                        String myCol="";
+                        for (LabWork p : labwork) {
+                            if (getIdToUpd == p.getId()){
+                                myCol=p.getInfo();
+                                completed=true;
+                            }
+                        }
+                        if(completed){
+                            sendAnswer("Какое поле вы бы хотели изменить? \n(id, name, coordinates.x, coordinates.y, creationDate, minimalPoint, personalQualitiesMinimum, difficulty, author.name, author.birthday, author.height, author.nationality)\n"+myCol);
+                            isComand=false;
+                            isSended=false;
+                        }else {
+                            sendAnswer("Ошибка. Вы указали несуществующий id");
+                            isComand=true;
+                        }
+                    }else{
 
-                isComand=true;
+
+                    }
+                }
+
                 buffer.clear();
 
             }

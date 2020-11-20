@@ -139,7 +139,7 @@ public class LabWork implements Serializable {
      *
      * @return value personal quality of element
      */
-    Double getPQM(){
+    public double getPQM(){
         return personalQualitiesMinimum;
     }
 
