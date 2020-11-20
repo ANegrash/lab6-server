@@ -14,7 +14,7 @@ import java.util.Locale;
 
 public class Connect {
     private static final int BUFFER_SIZE = 10000;
-    int port = 13, port2=12;
+    int port = 11, port2=12,idupdating=0;
     private DatagramSocket socket;
     boolean isComand=true, isSended=true;
     String comand, dataName;
@@ -320,27 +320,79 @@ public class Connect {
 
                 }
                 else if(comand.contains("update_id")) {
-                    if(isSended){
-                        int getIdToUpd =buffer.getInt();
+                    if (isSended) {
+                        int getIdToUpd = buffer.getInt();
                         boolean completed = false;
-                        String myCol="";
+                        String myCol = "";
                         for (LabWork p : labwork) {
-                            if (getIdToUpd == p.getId()){
-                                myCol=p.getInfo();
-                                completed=true;
+                            if (getIdToUpd == p.getId()) {
+                                myCol = p.getInfo();
+                                lw = p;
+                                idupdating = getIdToUpd;
+                                completed = true;
                             }
                         }
-                        if(completed){
-                            sendAnswer("Какое поле вы бы хотели изменить? \n(id, name, coordinates.x, coordinates.y, creationDate, minimalPoint, personalQualitiesMinimum, difficulty, author.name, author.birthday, author.height, author.nationality)\n"+myCol);
-                            isComand=false;
-                            isSended=false;
-                        }else {
+                        if (completed) {
+                            sendAnswer("Какое поле вы бы хотели изменить? \n(id, name, coordinates.x, coordinates.y, creationDate, minimalPoint, personalQualitiesMinimum, difficulty, author.name, author.birthday, author.height, author.nationality)\n" + myCol);
+                            isComand = false;
+                            isSended = false;
+
+
+                        } else {
                             sendAnswer("Ошибка. Вы указали несуществующий id");
-                            isComand=true;
+                            isComand = true;
                         }
-                    }else{
+                    } else {
+                        isComand = true;
+                        String datas = new String(buffer.array(), "UTF-8");
+                        System.out.println(datas);
+                        if (!datas.isEmpty()) {
+                            String[] poleZnach = datas.split(":");
+                            String pole, znach;
+                            pole = poleZnach[0];
+                            znach = poleZnach[1];
+                            znach.trim();
+                            switch (pole) {
+                                case "name":
+                                    lw.setName(znach);
+                                    System.out.println("Изменили имя на "+znach);
+                                    break;
+                                case "coordinates.x":
+                                    lw.setCoordinates(Long.parseLong(znach), "x");
+                                    break;
+                                case "coordinates.y":
+                                    lw.setCoordinates(Long.parseLong(znach), "y");
+                                    break;
+                                case "minimalPoint":
+                                    lw.setMinimalPoint(Float.parseFloat(znach));
+                                    break;
+                                case "personalQualitiesMinimum":
+                                    lw.setPQM(Double.parseDouble(znach));
+                                    break;
+                                case "difficulty":
+                                    lw.setDif(Difficulty.valueOf(znach));
+                                    break;
+                                case "author.name":
+                                    lw.setAuthorName(znach);
+                                    break;
+                                case "author.birthday":
+                                    lw.setAuthorBday(LocalDate.parse(znach, formatter));
+                                    break;
+                                case "author.height":
+                                    lw.setAuthorHeight(Float.parseFloat(znach));
+                                    break;
+                                case "author.nationality":
+                                    lw.setAuthorCountry(Country.valueOf(znach));
+                                    break;
+                            }
+                            for (LabWork p : labwork) {
+                                if (idupdating == p.getId()) {
+                                    p = lw;
+                                }
+                            }
+                            saveData(labwork);
 
-
+                        }
                     }
                 }
 
