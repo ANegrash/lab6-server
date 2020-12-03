@@ -14,7 +14,7 @@ import java.util.Locale;
 
 public class Connect {
     private static final int BUFFER_SIZE = 10000;
-    int port = 11, port2=12,idupdating=0;
+    int port = 1111, port2=1211,idupdating=0;
     private DatagramSocket socket;
     boolean isComand=true, isSended=true;
     String comand, dataName;
